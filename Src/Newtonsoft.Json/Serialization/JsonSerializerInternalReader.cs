@@ -557,7 +557,7 @@ namespace Newtonsoft.Json.Serialization
                     }
                     else
                     {
-                        targetDictionary = PopulateDictionary(dictionaryContract.ShouldCreateWrapper ? dictionaryContract.CreateWrapper(existingValue) : (IDictionary)existingValue, reader, dictionaryContract, member, id);
+                        targetDictionary = PopulateDictionary(dictionaryContract.ShouldCreateWrapper || !(existingValue is IDictionary) ? dictionaryContract.CreateWrapper(existingValue) : (IDictionary)existingValue, reader, dictionaryContract, member, id);
                     }
 
                     return targetDictionary;
@@ -912,7 +912,7 @@ namespace Newtonsoft.Json.Serialization
                     throw JsonSerializationException.Create(reader, "Cannot populate list type {0}.".FormatWith(CultureInfo.InvariantCulture, contract.CreatedType));
                 }
 
-                value = PopulateList((arrayContract.ShouldCreateWrapper) ? arrayContract.CreateWrapper(existingValue) : (IList)existingValue, reader, arrayContract, member, id);
+                value = PopulateList((arrayContract.ShouldCreateWrapper || !(existingValue is IList)) ? arrayContract.CreateWrapper(existingValue) : (IList)existingValue, reader, arrayContract, member, id);
             }
 
             return value;
@@ -955,7 +955,7 @@ namespace Newtonsoft.Json.Serialization
                         {
                             if (value is string)
                             {
-                                return Enum.Parse(contract.NonNullableUnderlyingType, value.ToString(), true);
+                                return EnumUtils.ParseEnum(contract.NonNullableUnderlyingType, value.ToString(), false);
                             }
                             if (ConvertUtils.IsInteger(primitiveContract.TypeCode))
                             {
@@ -1056,7 +1056,7 @@ namespace Newtonsoft.Json.Serialization
                 property.ObjectCreationHandling.GetValueOrDefault(Serializer._objectCreationHandling);
 
             if ((objectCreationHandling != ObjectCreationHandling.Replace)
-                && (tokenType == JsonToken.StartArray || tokenType == JsonToken.StartObject)
+                && (tokenType == JsonToken.StartArray || tokenType == JsonToken.StartObject || propertyConverter != null)
                 && property.Readable)
             {
                 currentValue = property.ValueProvider.GetValue(target);

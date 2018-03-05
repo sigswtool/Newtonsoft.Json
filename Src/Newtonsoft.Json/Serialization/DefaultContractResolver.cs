@@ -193,10 +193,7 @@ namespace Newtonsoft.Json.Serialization
         /// <returns>The contract for a given type.</returns>
         public virtual JsonContract ResolveContract(Type type)
         {
-            if (type == null)
-            {
-                throw new ArgumentNullException(nameof(type));
-            }
+            ValidationUtils.ArgumentNotNull(type, nameof(type));
 
             return _contractCache.Get(type);
         }
@@ -316,13 +313,6 @@ namespace Newtonsoft.Json.Serialization
         /// <returns>A <see cref="JsonObjectContract"/> for the given type.</returns>
         protected virtual JsonObjectContract CreateObjectContract(Type objectType)
         {
-            // serializing DirectoryInfo without ISerializable will stackoverflow
-            // https://github.com/JamesNK/Newtonsoft.Json/issues/1541
-            if (Array.IndexOf(BlacklistedTypeNames, objectType.FullName) != -1)
-            {
-                throw new JsonSerializationException("Unable to serialize instance of '{0}'.".FormatWith(CultureInfo.InvariantCulture, objectType));
-            }
-
             JsonObjectContract contract = new JsonObjectContract(objectType);
             InitializeContract(contract);
 
@@ -407,7 +397,19 @@ namespace Newtonsoft.Json.Serialization
                 SetExtensionDataDelegates(contract, extensionDataMember);
             }
 
+            // serializing DirectoryInfo without ISerializable will stackoverflow
+            // https://github.com/JamesNK/Newtonsoft.Json/issues/1541
+            if (Array.IndexOf(BlacklistedTypeNames, objectType.FullName) != -1)
+            {
+                contract.OnSerializingCallbacks.Add(ThrowUnableToSerializeError);
+            }
+
             return contract;
+        }
+
+        private static void ThrowUnableToSerializeError(object o, StreamingContext context)
+        {
+            throw new JsonSerializationException("Unable to serialize instance of '{0}'.".FormatWith(CultureInfo.InvariantCulture, o.GetType()));
         }
 
         private MemberInfo GetExtensionDataMemberForType(Type type)
@@ -495,6 +497,13 @@ namespace Newtonsoft.Json.Serialization
                  : null;
                 Func<object> createExtensionDataDictionary = JsonTypeReflector.ReflectionDelegateFactory.CreateDefaultConstructor<object>(createdType);
                 MethodInfo addMethod = t.GetMethod("Add", new[] { keyType, valueType });
+                if (addMethod == null)
+                {
+                    // Add is explicitly implemented and non-public
+                    // get from dictionary interface
+                    addMethod = dictionaryType.GetMethod("Add", new[] {keyType, valueType});
+                }
+
                 MethodCall<object, object> setExtensionDataDictionaryValue = JsonTypeReflector.ReflectionDelegateFactory.CreateMethodCall<object>(addMethod);
 
                 ExtensionDataSetter extensionDataSetter = (o, key, value) =>
@@ -900,7 +909,7 @@ namespace Newtonsoft.Json.Serialization
                     case "System.Collections.Concurrent.ConcurrentQueue`1":
                     case "System.Collections.Concurrent.ConcurrentStack`1":
                     case "System.Collections.Concurrent.ConcurrentBag`1":
-                    case "System.Collections.Concurrent.ConcurrentDictionary`2":
+                    case JsonTypeReflector.ConcurrentDictionaryTypeName:
                     case "System.Collections.ObjectModel.ObservableCollection`1":
                         return true;
                 }
@@ -1166,6 +1175,15 @@ namespace Newtonsoft.Json.Serialization
             {
                 return CreateDictionaryContract(objectType);
             }
+
+#if HAVE_DATA_CONTRACTS
+            // don't use GetDataContractAttribute because it looks for the attribute on base classes
+            DataContractAttribute dataContractAttribute = JsonTypeReflector.GetCachedAttribute<DataContractAttribute>(objectType);
+            if (dataContractAttribute != null)
+            {
+                return CreateObjectContract(objectType);
+            }
+#endif
 
             if (t == typeof(JToken) || t.IsSubclassOf(typeof(JToken)))
             {
