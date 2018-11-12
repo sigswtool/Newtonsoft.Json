@@ -493,8 +493,7 @@ namespace Newtonsoft.Json
                     }
                     else
                     {
-                        Uri uri = v as Uri;
-                        s = uri != null ? uri.OriginalString : v.ToString();
+                        s = v is Uri uri ? uri.OriginalString : v.ToString();
                     }
 
                     SetToken(JsonToken.String, s, false);
@@ -795,6 +794,12 @@ namespace Newtonsoft.Json
 
             if (decimal.TryParse(s, NumberStyles.Number, Culture, out decimal d))
             {
+                SetToken(JsonToken.Float, d, false);
+                return d;
+            }
+            else if (ConvertUtils.DecimalTryParse(s.ToCharArray(), 0, s.Length, out d) == ParseResult.Success)
+            {
+                // This is to handle strings like "96.014e-05" that are not supported by traditional decimal.TryParse
                 SetToken(JsonToken.Float, d, false);
                 return d;
             }

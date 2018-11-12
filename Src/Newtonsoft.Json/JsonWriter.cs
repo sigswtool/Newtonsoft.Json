@@ -561,17 +561,17 @@ namespace Newtonsoft.Json
                     break;
                 case JsonToken.Float:
                     ValidationUtils.ArgumentNotNull(value, nameof(value));
-                    if (value is decimal d)
+                    if (value is decimal decimalValue)
                     {
-                        WriteValue(d);
+                        WriteValue(decimalValue);
                     }
-                    else if (value is double)
+                    else if (value is double doubleValue)
                     {
-                        WriteValue((double)value);
+                        WriteValue(doubleValue);
                     }
-                    else if (value is float)
+                    else if (value is float floatValue)
                     {
-                        WriteValue((float)value);
+                        WriteValue(floatValue);
                     }
                     else
                     {
@@ -696,28 +696,12 @@ namespace Newtonsoft.Json
 
         private void WriteConstructorDate(JsonReader reader)
         {
-            if (!reader.Read())
+            if (!JavaScriptUtils.TryGetDateFromConstructorJson(reader, out DateTime dateTime, out string errorMessage))
             {
-                throw JsonWriterException.Create(this, "Unexpected end when reading date constructor.", null);
-            }
-            if (reader.TokenType != JsonToken.Integer)
-            {
-                throw JsonWriterException.Create(this, "Unexpected token when reading date constructor. Expected Integer, got " + reader.TokenType, null);
+                throw JsonWriterException.Create(this, errorMessage, null);
             }
 
-            long ticks = (long)reader.Value;
-            DateTime date = DateTimeUtils.ConvertJavaScriptTicksToDateTime(ticks);
-
-            if (!reader.Read())
-            {
-                throw JsonWriterException.Create(this, "Unexpected end when reading date constructor.", null);
-            }
-            if (reader.TokenType != JsonToken.EndConstructor)
-            {
-                throw JsonWriterException.Create(this, "Unexpected token when reading date constructor. Expected EndConstructor, got " + reader.TokenType, null);
-            }
-
-            WriteValue(date);
+            WriteValue(dateTime);
         }
 
         private void WriteEnd(JsonContainerType type)
@@ -1713,12 +1697,12 @@ namespace Newtonsoft.Json
                     InternalWriteStart(token, JsonContainerType.Constructor);
                     break;
                 case JsonToken.PropertyName:
-                    if (!(value is string))
+                    if (!(value is string s))
                     {
                         throw new ArgumentException("A name is required when setting property name state.", nameof(value));
                     }
 
-                    InternalWritePropertyName((string)value);
+                    InternalWritePropertyName(s);
                     break;
                 case JsonToken.Comment:
                     InternalWriteComment();
