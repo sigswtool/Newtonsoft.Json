@@ -1,8 +1,8 @@
 ﻿properties {
-  $zipFileName = "Json120r1.zip"
+  $zipFileName = "Json120r3.zip"
   $majorVersion = "12.0"
-  $majorWithReleaseVersion = "12.0.1"
-  $nugetPrerelease = "beta1"
+  $majorWithReleaseVersion = "12.0.3"
+  $nugetPrerelease = $null
   $version = GetVersion $majorWithReleaseVersion
   $packageId = "Newtonsoft.Json"
   $signAssemblies = $false
@@ -12,8 +12,9 @@
   $msbuildVerbosity = 'minimal'
   $treatWarningsAsErrors = $false
   $workingName = if ($workingName) {$workingName} else {"Working"}
-  $netCliChannel = "2.0"
-  $netCliVersion = "2.1.402"
+  $assemblyVersion = if ($assemblyVersion) {$assemblyVersion} else {$majorVersion + '.0.0'}
+  $netCliChannel = "Current"
+  $netCliVersion = "3.0.100"
   $nugetUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
 
   $baseDir  = resolve-path ..
@@ -30,15 +31,13 @@
   $nunitConsolePath = "$buildDir\Temp\NUnit.ConsoleRunner.$nunitConsoleVersion"
 
   $builds = @(
-    @{Framework = "netstandard2.0"; TestsFunction = "NetCliTests"; TestFramework = "netcoreapp2.0"; Enabled=$true},
-    @{Framework = "netstandard1.3"; TestsFunction = "NetCliTests"; TestFramework = "netcoreapp1.1"; Enabled=$true},
-    @{Framework = "netstandard1.0"; TestsFunction = "NetCliTests"; TestFramework = "netcoreapp1.0"; Enabled=$true},
+    @{Framework = "netstandard2.0"; TestsFunction = "NetCliTests"; TestFramework = "netcoreapp3.0"; Enabled=$true},
+    @{Framework = "netstandard1.3"; TestsFunction = "NetCliTests"; TestFramework = "netcoreapp2.2"; Enabled=$true},
+    @{Framework = "netstandard1.0"; TestsFunction = "NetCliTests"; TestFramework = "netcoreapp2.1"; Enabled=$true},
     @{Framework = "net45"; TestsFunction = "NUnitTests"; TestFramework = "net46"; NUnitFramework="net-4.0"; Enabled=$true},
     @{Framework = "net40"; TestsFunction = "NUnitTests"; NUnitFramework="net-4.0"; Enabled=$true},
     @{Framework = "net35"; TestsFunction = "NUnitTests"; NUnitFramework="net-2.0"; Enabled=$true},
-    @{Framework = "net20"; TestsFunction = "NUnitTests"; NUnitFramework="net-2.0"; Enabled=$true},
-    @{Framework = "portable-net45+win8+wpa81+wp8"; TestsFunction = "NUnitTests"; TestFramework = "net452"; NUnitFramework="net-4.0"; Enabled=$true},
-    @{Framework = "portable-net40+win8+wpa81+wp8+sl5"; TestsFunction = "NUnitTests"; TestFramework = "net451"; NUnitFramework="net-4.0"; Enabled=$true}
+    @{Framework = "net20"; TestsFunction = "NUnitTests"; NUnitFramework="net-2.0"; Enabled=$true}
   )
 }
 
@@ -103,6 +102,7 @@ task Package -depends Build {
 
     mkdir $workingDir\NuGet
     move -Path $sourceDir\Newtonsoft.Json\bin\Release\*.nupkg -Destination $workingDir\NuGet
+    move -Path $sourceDir\Newtonsoft.Json\bin\Release\*.snupkg -Destination $workingDir\NuGet
   }
 
   Write-Host "Build documentation: $buildDocumentation"
@@ -153,10 +153,8 @@ function NetCliBuild()
 
   exec { & $script:msBuildPath "/t:restore" "/v:$msbuildVerbosity" "/p:Configuration=Release" "/p:LibraryFrameworks=`"$libraryFrameworks`"" "/p:TestFrameworks=`"$testFrameworks`"" "/m" $projectPath | Out-Default } "Error restoring $projectPath"
 
-  Write-Host -ForegroundColor Green "Building $libraryFrameworks in $projectPath"
+  Write-Host -ForegroundColor Green "Building $libraryFrameworks $assemblyVersion in $projectPath"
   Write-Host
-
-  $assemblyVersion = $majorVersion + '.0.0'
 
   exec { & $script:msBuildPath "/t:build" "/v:$msbuildVerbosity" $projectPath "/p:Configuration=Release" "/p:LibraryFrameworks=`"$libraryFrameworks`"" "/p:TestFrameworks=`"$testFrameworks`"" "/p:AssemblyOriginatorKeyFile=$signKeyPath" "/p:SignAssembly=$signAssemblies" "/p:TreatWarningsAsErrors=$treatWarningsAsErrors" "/p:AdditionalConstants=$additionalConstants" "/p:GeneratePackageOnBuild=$buildNuGet" "/p:ContinuousIntegrationBuild=true" "/p:PackageId=$packageId" "/p:VersionPrefix=$majorWithReleaseVersion" "/p:VersionSuffix=$nugetPrerelease" "/p:AssemblyVersion=$assemblyVersion" "/p:FileVersion=$version" "/m" }
 }
@@ -195,10 +193,24 @@ function EnsureNuGetPackage($packageName, $packagePath, $packageVersion)
 function GetMsBuildPath()
 {
   $path = & $vswherePath\tools\vswhere.exe -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
-  if (!($path)) {
+  if (!($path))
+  {
     throw "Could not find Visual Studio install path"
   }
-  return join-path $path 'MSBuild\15.0\Bin\MSBuild.exe'
+
+  $msBuildPath = join-path $path 'MSBuild\15.0\Bin\MSBuild.exe'
+  if (Test-Path $msBuildPath)
+  {
+    return $msBuildPath
+  }
+
+  $msBuildPath = join-path $path 'MSBuild\Current\Bin\MSBuild.exe'
+  if (Test-Path $msBuildPath)
+  {
+    return $msBuildPath
+  }
+
+  throw "Could not find MSBuild path"
 }
 
 function NetCliTests($build)

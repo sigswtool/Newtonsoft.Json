@@ -84,7 +84,8 @@ namespace Newtonsoft.Json.Tests.JsonTextReaderTests
 
             await ExceptionAssert.ThrowsAsync<JsonReaderException>(
                 () => token.CreateReader().ReadAsDecimalAsync(),
-                "Could not convert to decimal: 1.79769313486232E+308. Path ''."
+                "Could not convert to decimal: 1.79769313486232E+308. Path ''.",
+                "Could not convert to decimal: 1.7976931348623157E+308. Path ''."
             );
         }
 
@@ -1752,7 +1753,29 @@ third line", jsonTextReader.Value);
             Assert.IsTrue(reader.ReadAsInt32Async(token).IsCanceled);
             Assert.IsTrue(reader.ReadAsStringAsync(token).IsCanceled);
         }
+
+        [Test]
+        public async Task ThrowOnDuplicateKeysDeserializingAsync()
+        {
+            string json = @"
+                {
+                    ""a"": 1,
+                    ""b"": [
+                        {
+                            ""c"": {
+                                ""d"": 1,
+                                ""d"": ""2""
+                            }
+                        }
+                    ]
+                }
+            ";
+
+            JsonLoadSettings settings = new JsonLoadSettings { DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error };
+
+            JsonTextReader reader = new JsonTextReader(new StringReader(json));
+            await ExceptionAssert.ThrowsAsync<JsonReaderException>(async () => await JToken.ReadFromAsync(reader, settings));
+        }
     }
 }
-
 #endif
